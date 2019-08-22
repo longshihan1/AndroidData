@@ -161,12 +161,6 @@
 
    ![](https://img-blog.csdn.net/20180309004634352?watermark/2/text/aHR0cDovL2Jsb2cuY3Nkbi5uZXQvcGdnX2NvbGQ=/font/5a6L5L2T/fontsize/400/fill/I0JBQkFCMA==/dissolve/70)
 
-      
-
-   
-
-   
-
 8. 如何做启动优化？ 冷启动什么的肯定是基础，后续应该还有的是懒加载，丢线程池同步处理，需要注意这里可能会有的坑是，丢线程池如何知道全部完成。
 
    [影响速度原因](https://blog.csdn.net/yuanguozhengjust/article/details/80052066)：
@@ -198,12 +192,23 @@
 3. 单例模式双重加锁，为什么要这样做。
 
 4. Handler 机制原理，IdleHandler 什么时候调用。
+    提供一个android没有的声明周期回调时机（比如activitythread的onresume回调给act的onresume,可以优先绘制），[比如](https://blog.csdn.net/tencent_bugly/article/details/78395717)
+    可以结合HandlerThread, 用于单线程消息通知器
 
 5. LeakCanary 原理，为什么检测内存泄漏需要两次？
+    一次是leak自己检测，通过ondestory查看可用性，进行清除弱引用，发现之后通过生成dump文件检测位置
 
 6. BlockCanary 原理。
+   android是消息驱动了，换句话说，所有的UI操作都是sendmessage到messagequeue里去执行的。oncreate onresume 等，这里面的方法都在looper里面执行的。
+   因此如果应用发生卡顿，一定是在 dispatchMessage 中执行了耗时操作
+   LooperMonitor第二次调用时，会判断第二次与第一次的时间间隔是否会超过阀值
 
-7. ViewGroup 绘制顺序；
+7. ViewGroup 绘制顺序
+    从log可以看到,当Viewgroup嵌套一个View的时候执行的顺序如下 
+   =>>>>>View的onMeasure方法 =>>>>> ViewGroup的onMeasure方法 
+   =>>>>>ViewGroup的onSizeChanged方法 =>>>>>View的onSizeChanged方法 
+   =>>>>>View的onlayout方法确定自己在ViewGroup中的位置=>>>>>ViewGroup的onlayout方法确定自己的位置 
+   =>>>>>View的ondraw方法绘制View
 
 8. Android 有哪些存储数据的方式。
 
@@ -216,6 +221,9 @@
 10. 讲讲 Android 的四大组件；
 
 11. 属性动画、补间动画、帧动画的区别和使用场景；
+    ObjectAnimator
+    TranslateAnimation,ScaleAnimation,RotateAnimation,AlphaAnimation
+
 
 12. 自定义 ViewGroup 如何实现 FlowLayout？如何实现 FlowLayout 调换顺序？
 
@@ -224,6 +232,7 @@
 14. 自定义 View 如何实现拉弓效果，贝瑟尔曲线原理实现？
 
 15. APK 瘦身是怎么做的，只用 armabi-v7a 没有什么问题么？ APK 瘦身这个基本是 100% 被面试问到，可能是我简历上提到的原因。
+   可以
 
 16. ListView 和 RecyclerView 区别？RecyclerView 有几层缓存，如何让两个 RecyclerView 共用一个缓存？
 
@@ -237,18 +246,29 @@
 
 21. 讲讲轨迹视频的音视频合成原理；
 
-22. AIDL 相关；
+22. AIDL 相关
+   AIDL和Messenger的区别：
+   Messenger不适用大量并发的请求：Messenger以串行的方式来处理客户端发来的消息，如果大量的消息同时发送到服务端，服务端仍然只能一个个的去处理。
+   Messenger主要是为了传递消息：对于需要跨进程调用服务端的方法，这种情景不适用Messenger。
+   Messenger的底层实现是AIDL，系统为我们做了封装从而方便上层的调用。
+   AIDL适用于大量并发的请求，以及涉及到服务端端方法调用的情况
+
 
 23. Binder 机制，讲讲 Linux 上的 IPC 通信，Binder 有什么优势，Android 上有哪些多进程通信机制?
+    采用C/S的通信模式。而在linux通信机制中，目前只有socket支持C/S的通信模式，但socket有其劣势，具体参看第二条。
+   有更好的传输性能。对比于Linux的通信机制，
+      socket：是一个通用接口，导致其传输效率低，开销大；
+      管道和消息队列：因为采用存储转发方式，所以至少需要拷贝2次数据，效率低；
+      共享内存：虽然在传输时没有拷贝数据，但其控制机制复杂（比如跨进程通信时，需获取对方进程的pid，得多种机制协同操作）。
+   安全性更高。Linux的IPC机制在本身的实现中，并没有安全措施，得依赖上层协议来进行安全控制。而Binder机制的UID/PID是由Binder机制本身在内核空间添加身份标识，安全性高；并且Binder可以建立私有通道，这是linux的通信机制所无法实现的（Linux访问的接入点是开放的）。
+   另外一个优点是对用户来说，通过binder屏蔽了client的调用server的隔阂，client端函数的名字、参数和返回值和server的方法一模一样，对用户来说犹如就在本地（也可以做得不一样），这样的体验或许其他ipc方式也可以实现，但binder出生那天就是为此而生。
 
 24. RxJava 的线程切换原理。
 
 25. OkHttp 和 Volloy 区别；
 
 26. Glide 缓存原理，如何设计一个大图加载框架。
+   将这个id连同着signature、width、height等等10个参数一起传入到EngineKeyFactory的buildKey()方法当中，从而构建出了一个EngineKey对象，这个EngineKey也就是Glide中的缓存Key了
 
 27. LRUCache 原理；
-
-28. 讲讲咕咚项目开发中遇到的最大的一个难题和挑战； 这个问题基本是 95% 必问的一个问题；
-
-29. 说说你开发最大的优势点。 出现率同上。
+   LinkedHashMap
